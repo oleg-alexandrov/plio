@@ -6,12 +6,12 @@ from functools import singledispatch
 from linecache import getline
 import numpy as np
 import pandas as pd
-
+import sys
 from plio.utils.utils import is_number, convert_string_to_float
 
 def socetset_keywords_to_dict(keywords, ell=None):
     """
-    Convert a SocetCet keywords.list file to JSON
+    Convert a SocetSet keywords.list file to JSON
 
     Parameters
     ----------
@@ -193,7 +193,7 @@ def save_ipf(df, output_path):
         outIPF.close()
     return
 
-def read_gpf(input_data,gxp=False):
+def read_gpf(input_data, gxp=False, convert_gxp_to_set=False):
     """
     Read a socet gpf file into a pandas data frame
 
@@ -206,12 +206,18 @@ def read_gpf(input_data,gxp=False):
                  Flag to notify function if input_data follows Socet GXP format.
                  Defaults is False (assume Socet Set format).
 
+    convert_gxp_to_socet  : bool
+                 Flag to force a conversion from gxp to socet set GPF style. The function 
+                 convert_gpf_gxp_to_set saves to a new *.gpf.socetset file for np.genfromtxt
+                 Note: this will override the above gxp flag to False because the newly
+                 created and reformatted Socet Set type GPF file will now be loaded.
+                 Defaults to False to maintain backwards compatibility. 
+
     Returns
     -------
     df : pd.DataFrame
          containing the gpf data with appropriate column names and indices
     """
-
     # line containing point count differs between Socet Set and Socet GXP gpf files
     if not gxp:
         l = 2
@@ -220,7 +226,14 @@ def read_gpf(input_data,gxp=False):
 
     cnt = getline(input_data, l)
     cnt = int(cnt)
-    
+
+    # Once this function is run, revert to normal Socet Set dataframe conversion by setting "gxp=False"
+    # this function return a newly created file emulating a Socet Set GPF file. 
+    if convert_gxp_to_set:
+        input_data = convert_gpf_gxp_to_set(input_data)
+        gxp = False
+        l = 2  #with new file, reset GPF point count line to a socet set file type
+
     # Lists of column names and their data types
     if not gxp:
         columns = ['point_id','stat','known','lat_Y_North','long_X_East','ht','sig0','sig1','sig2','res0','res1','res2']
@@ -245,13 +258,21 @@ def read_gpf(input_data,gxp=False):
     else:
         # Read GXP-style GPF a block at a time
         lmax=( (l+1) + ((cnt-1)*8) + 2 )
+
         for x in range(l+1,lmax,8):
-            a = np.genfromtxt(input_data, skip_header=(x), max_rows=4, dtype='unicode')
-            b = np.genfromtxt(input_data, skip_header=(x+4), max_rows=3, dtype='unicode')
-            if x == (l+1):
-                d = np.hstack([np.hstack(a),np.hstack(b)])
-            else:
-                d = np.vstack(( d, np.hstack([np.hstack(a),np.hstack(b)])) )
+            try:
+                a = np.genfromtxt(input_data, skip_header=(x), max_rows=4, dtype='unicode')
+                b = np.genfromtxt(input_data, skip_header=(x+4), max_rows=3, dtype='unicode')
+                if x == (l+1):
+                    d = np.hstack([np.hstack(a),np.hstack(b)])
+                else:
+                    d = np.vstack(( d, np.hstack([np.hstack(a),np.hstack(b)])) )
+            except ValueError as ve:
+                print('\nError: One or more control points do not follow GXP formatting.\n' +
+                      'This is likely due to not being used in the solve.\n' +
+                      'Please remove any unused ground control points in\n' +
+                      'Socet GXP using the ground point editor.\n')
+                sys.exit(1)
 
     df = pd.DataFrame(d, columns=columns)
 
@@ -370,3 +391,48 @@ def read_atf(atf_file):
         files_dict['PATH'] = files['basepath']
 
         return files_dict
+
+def convert_gpf_gxp_to_set(gpf_file):
+    """
+    Reads a GXP style .gpf file and returns and converts
+    to a Socet SET style .gpf. Essentially removing the
+    projection header and any extra lines.
+
+    Parameters
+    ----------
+    gpf_file : str
+               Full path to a socet GXP gpf file
+
+    Returns
+    -------
+    tmp_filename  : str
+                    newly created file in socet set format
+    """
+    with open(gpf_file) as f:
+        lines = f.read().splitlines()
+        
+        set_str = lines[0] + "\n"
+        set_str += lines[20] + "\n"
+        # replace with Socet Set column names
+        set_str += "point_id,stat,known,lat_Y_North,long_X_East,ht,sig(3),res(3)\n"
+
+        cnt_gpfs = int(lines[20])
+
+        index = 22
+        for gpf in range(0,cnt_gpfs):
+            for i in range(0,4):
+                set_str += lines[index] + "\n"
+                index += 1
+            if len(lines[index].strip()) > 0: # when next line is not blank
+                index += 3 # skip the 3 extra GXP lines
+            index += 1
+            set_str += "\n"
+
+        # create temporary socet set compatible file
+        tmp_filename = gpf_file + ".socetset"
+        with open(tmp_filename, 'w') as set_file:
+            set_file.write(set_str)
+    
+    return tmp_filename
+
+
