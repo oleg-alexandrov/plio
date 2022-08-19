@@ -411,27 +411,27 @@ def convert_gpf_gxp_to_set(gpf_file):
     with open(gpf_file) as f:
         lines = f.read().splitlines()
         
-        set_str = lines[0] + "\n"
-        set_str += lines[20] + "\n"
-        # replace with Socet Set column names
-        set_str += "point_id,stat,known,lat_Y_North,long_X_East,ht,sig(3),res(3)\n"
+    set_str = lines[0] + "\n"
+    set_str += lines[20] + "\n"
+    # replace with Socet Set column names
+    set_str += "point_id,stat,known,lat_Y_North,long_X_East,ht,sig(3),res(3)\n"
 
-        cnt_gpfs = int(lines[20])
+    cnt_gpfs = int(lines[20])
 
-        index = 22
-        for gpf in range(0,cnt_gpfs):
-            for i in range(0,4):
-                set_str += lines[index] + "\n"
-                index += 1
-            if len(lines[index].strip()) > 0: # when next line is not blank
-                index += 3 # skip the 3 extra GXP lines
+    index = 22
+    for gpf in range(0,cnt_gpfs):
+        for i in range(0,4):
+            set_str += lines[index] + "\n"
             index += 1
-            set_str += "\n"
+        if len(lines[index].strip()) > 0: # when next line is not blank
+            index += 3 # skip the 3 extra GXP lines
+        index += 1
+        set_str += "\n"
 
-        # create temporary socet set compatible file
-        tmp_filename = gpf_file + ".socetset"
-        with open(tmp_filename, 'w') as set_file:
-            set_file.write(set_str)
+    # create temporary socet set compatible file
+    tmp_filename = gpf_file + ".socetset"
+    with open(tmp_filename, 'w') as set_file:
+        set_file.write(set_str)
     
     return tmp_filename
 
