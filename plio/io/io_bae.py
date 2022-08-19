@@ -6,7 +6,7 @@ from functools import singledispatch
 from linecache import getline
 import numpy as np
 import pandas as pd
-import sys
+
 from plio.utils.utils import is_number, convert_string_to_float
 
 def socetset_keywords_to_dict(keywords, ell=None):
@@ -272,7 +272,7 @@ def read_gpf(input_data, gxp=False, convert_gxp_to_set=False):
                       'This is likely due to not being used in the solve.\n' +
                       'Please remove any unused ground control points in\n' +
                       'Socet GXP using the ground point editor.\n')
-                sys.exit(1)
+                return 1
 
     df = pd.DataFrame(d, columns=columns)
 
